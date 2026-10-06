@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1b1440">
+  <title>Taç Arena</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ ANA MENÜ ============ -->
+  <section id="home" class="screen active">
+    <div class="home-top">
+      <button class="icon-btn" id="btnSound" aria-label="Ses">🔊</button>
+      <div class="net-pill" id="netPill"><span class="dot"></span><span id="netText">Bağlanıyor…</span></div>
+      <button class="icon-btn" id="btnHelp" aria-label="Nasıl oynanır">❓</button>
+    </div>
+
+    <div class="logo">
+      <div class="logo-crown">👑</div>
+      <h1>TAÇ ARENA</h1>
+      <p>Kuleleri yık, tacı kap!</p>
+    </div>
+
+    <div class="profile-card" id="profileCard">
+      <div class="avatar" id="pAvatar">🛡️</div>
+      <div class="pinfo">
+        <div class="pname"><span id="pName">Oyuncu</span> <span class="edit">✏️</span></div>
+        <div class="parena" id="pArena">Eğitim Kampı</div>
+      </div>
+      <div class="ptrophy"><span>🏆</span><b id="pTrophy">0</b></div>
+    </div>
+
+    <div class="menu">
+      <button class="btn btn-big btn-gold" id="btnOnline">
+        <span class="bi">⚔️</span><span><b>SAVAŞ</b><small>Online rakip bul</small></span>
+      </button>
+      <div class="menu-row">
+        <button class="btn btn-blue" id="btnFriend"><span class="bi">👥</span><span><b>Arkadaşla</b><small>Oda kodu</small></span></button>
+        <button class="btn btn-green" id="btnBot"><span class="bi">🤖</span><span><b>Antrenman</b><small>Bota karşı</small></span></button>
+      </div>
+      <div class="menu-row">
+        <button class="btn btn-purple" id="btnDeck"><span class="bi">🃏</span><span><b>Destem</b><small>Kartları seç</small></span></button>
+        <button class="btn btn-orange" id="btnAch"><span class="bi">🏅</span><span><b>Başarımlar</b><small id="achCount">0/0</small></span></button>
+      </div>
+    </div>
+
+    <div class="deck-preview" id="deckPreview"></div>
+    <div class="stats-line" id="statsLine"></div>
+  </section>
+
+  <!-- ============ DESTE ============ -->
+  <section id="deck" class="screen">
+    <header class="bar">
+      <button class="icon-btn" data-back>←</button>
+      <h2>Destem</h2>
+      <div class="avg">Ort. ⚗️ <b id="avgElixir">0</b></div>
+    </header>
+    <div class="scroll">
+      <div class="hint" id="deckHint">Bir karta dokun: bilgi gör, desteye ekle veya değiştir.</div>
+      <div class="card-grid deck-grid" id="deckGrid"></div>
+      <h3 class="sub">Tüm Kartlar <small id="collCount"></small></h3>
+      <div class="card-grid" id="collGrid"></div>
+    </div>
+  </section>
+
+  <!-- ============ ARAMA ============ -->
+  <section id="search" class="screen center">
+    <div class="search-box">
+      <div class="spinner"><span>⚔️</span></div>
+      <h2 id="searchTitle">Rakip aranıyor…</h2>
+      <div class="search-time" id="searchTime">0:00</div>
+      <p class="muted" id="searchInfo">Çevrimiçi oyuncular: –</p>
+      <p class="tip" id="searchTip"></p>
+      <button class="btn btn-red" id="btnCancelSearch">İptal</button>
+    </div>
+  </section>
+
+  <!-- ============ ARKADAŞ ODASI ============ -->
+  <section id="room" class="screen">
+    <header class="bar">
+      <button class="icon-btn" data-back>←</button>
+      <h2>Arkadaşla Oyna</h2>
+      <div></div>
+    </header>
+    <div class="scroll room-body">
+      <div class="panel">
+        <h3>1) Oda oluştur</h3>
+        <p class="muted">Kodu arkadaşına gönder, o da “Katıl” kısmına yazsın.</p>
+        <button class="btn btn-gold wide" id="btnCreateRoom">Oda Oluştur</button>
+        <div class="room-code hidden" id="roomCodeBox">
+          <div class="code" id="roomCode">----</div>
+          <button class="btn btn-small" id="btnShareCode">📋 Kopyala / Paylaş</button>
+        </div>
+      </div>
+      <div class="or">veya</div>
+      <div class="panel">
+        <h3>2) Odaya katıl</h3>
+        <input id="roomInput" class="code-input" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+        <button class="btn btn-blue wide" id="btnJoinRoom">Katıl</button>
+      </div>
+      <div class="room-status" id="roomStatus"></div>
+    </div>
+  </section>
+
+  <!-- ============ OYUN ============ -->
+  <section id="game" class="screen">
+    <div class="hud-top">
+      <div class="opp">
+        <div class="opp-name" id="oppName">Rakip</div>
+        <div class="opp-tr" id="oppTr"></div>
+      </div>
+      <div class="score"><span class="cr blue" id="crMe">0</span><span class="crown">👑</span><span class="cr red" id="crOp">0</span></div>
+      <div class="timer-box">
+        <div class="timer-label" id="timerLabel">Kalan süre</div>
+        <div class="timer" id="timer">3:00</div>
+      </div>
+    </div>
+    <div class="arena-wrap" id="arenaWrap">
+      <canvas id="cv"></canvas>
+      <div class="banner" id="banner"></div>
+      <button class="icon-btn float-l" id="btnMenu" aria-label="Menü">⚙️</button>
+      <button class="icon-btn float-r" id="btnEmote" aria-label="Emoji">😀</button>
+      <div class="emote-panel hidden" id="emotePanel"></div>
+      <div class="waiting hidden" id="waitOverlay">
+        <div class="spinner small"><span>⏳</span></div>
+        <div id="waitText">Rakip bağlanıyor…</div>
+      </div>
+    </div>
+    <div class="hud-bottom">
+      <div class="hand">
+        <div class="next-card" id="nextCard"><small>Sıradaki</small><div class="nc-art"></div></div>
+        <div class="slots" id="slots"></div>
+      </div>
+      <div class="elixir">
+        <div class="drop">💧<b id="elixirNum">5</b></div>
+        <div class="ebar"><div class="efill" id="elixirFill"></div><div class="eticks"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODAL ============ -->
+  <div class="modal hidden" id="modal">
+    <div class="modal-box" id="modalBox"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="lib/supabase.js"></script>
+<script src="js/cards.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/net.js"></script>
+<script src="js/session.js"></script>
+<script src="js/render.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

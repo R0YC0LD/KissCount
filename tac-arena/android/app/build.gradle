@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Web oyununu (../../www) APK içine assets/www olarak kopyala
+def webOut = layout.buildDirectory.dir("generated/webassets")
+tasks.register('copyWebAssets', Copy) {
+    from(rootProject.file('../www'))
+    into(webOut.map { it.dir('www') })
+}
+
+def ksProps = new Properties()
+def ksFile = rootProject.file('keystore/keystore.properties')
+if (ksFile.exists()) ksFile.withInputStream { ksProps.load(it) }
+
+android {
+    namespace 'com.tacarena.game'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.tacarena.game'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        release {
+            if (ksFile.exists()) {
+                storeFile rootProject.file('keystore/' + ksProps['storeFile'])
+                storePassword ksProps['storePassword']
+                keyAlias ksProps['keyAlias']
+                keyPassword ksProps['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ksFile.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs += [webOut]
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+tasks.named('preBuild') { dependsOn 'copyWebAssets' }
