@@ -66,7 +66,7 @@
     const typeIcon = c.type === 'spell' ? '✨' : (c.type === 'building' ? '🏛️' : '');
     return `<div class="tcard ${extra || ''}" style="--rc:${RARITY[c.rarity].color}" data-k="${k}">
       <div class="cost">${c.cost}</div><div class="type">${typeIcon}</div>
-      <div class="art">${c.emoji}</div><div class="nm">${esc(c.name)}</div></div>`;
+      <img class="art" src="${TA.Art.cardArt(k)}" alt=""><div class="nm">${esc(c.name)}</div></div>`;
   }
 
   let current = 'home';
@@ -113,7 +113,7 @@
     $('pTrophy').textContent = profile.trophies;
     $('pArena').textContent = ar[1];
     $('pAvatar').textContent = ar[2];
-    $('deckPreview').innerHTML = deck.map(k => `<div class="mini"><i>${CARDS[k].cost}</i>${CARDS[k].emoji}</div>`).join('');
+    $('deckPreview').innerHTML = deck.map(k => `<div class="mini"><img src="${TA.Art.cardArt(k)}" alt=""><i>${CARDS[k].cost}</i></div>`).join('');
     $('statsLine').textContent = `${profile.games} maç · ${profile.wins} galibiyet · ${profile.losses} mağlubiyet`;
     const done = ACHIEVEMENTS.filter(a => profile.ach[a.id]).length;
     $('achCount').textContent = `${done}/${ACHIEVEMENTS.length}`;
@@ -246,9 +246,6 @@
     const s = new TA.BotSession({ deck, name: profile.name, level, botName: BOT_NAMES[level] });
     s.kind = 'bot'; s.level = level;
     enterGame(s, BOT_NAMES[level], level === 'hard' ? '😈 Zor' : level === 'easy' ? '🙂 Kolay' : '😐 Normal');
-    s.started = true;
-    banner('SAVAŞ!', 'Kuleleri yık!');
-    TA.Audio.play('start');
   }
 
   // ---------------- Online arama ----------------
@@ -331,8 +328,7 @@
       $('oppName').textContent = d.oppName;
       $('oppTr').textContent = '🏆 ' + (d.oppTrophies || 0);
       if (kind === 'room' && net) net.leaveRoom();
-      banner('SAVAŞ!', kind === 'room' ? 'Arkadaş maçı' : 'Online maç');
-      TA.Audio.play('start');
+      TA.Audio.play('match');
       vibrate(60);
     };
     s.onInfo = d => { $('oppName').textContent = d.oppName; $('oppTr').textContent = '🏆 ' + (d.oppTrophies || 0); };
@@ -357,6 +353,7 @@
   let resultShown = false;
   let lastLeft = 999;
   let lastEmote = 0;
+  let lastCd = -1;
 
   function enterGame(s, oppName, oppTr) {
     session = s;
@@ -365,8 +362,11 @@
     lastLeft = 999;
     renderer.mySide = s.mySide;
     renderer.flip = s.mySide === 1;
-    renderer.particles = []; renderer.rings = []; renderer.beams = []; renderer.popups = []; renderer.bubbles = [];
+    renderer.reset();
     renderer.drag = null;
+    lastCd = -1;
+    $('countdown').classList.add('hidden');
+    $('lagWarn').classList.add('hidden');
     $('oppName').textContent = oppName;
     $('oppTr').textContent = oppTr || '';
     $('waitOverlay').classList.add('hidden');
@@ -392,6 +392,36 @@
     }
   }
 
+  function flyCrown(f, mine) {
+    const r = cv.getBoundingClientRect();
+    const p = renderer.screenOf(f.x, f.y, 3);
+    const target = $(mine ? 'crMe' : 'crOp').getBoundingClientRect();
+    const el = document.createElement('div');
+    el.className = 'fly-crown';
+    el.textContent = '👑';
+    el.style.left = (r.left + p.x - 17) + 'px';
+    el.style.top = (r.top + p.y - 17) + 'px';
+    document.body.appendChild(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.transform = `translate(${target.left + target.width / 2 - (r.left + p.x)}px, ${target.top + target.height / 2 - (r.top + p.y)}px) scale(.5)`;
+      el.style.opacity = '0.2';
+    }));
+    setTimeout(() => el.remove(), 1000);
+  }
+  function confetti() {
+    const cols = ['#ffc531', '#3b82f6', '#e5484d', '#3ddc84', '#b27bff', '#fff'];
+    for (let i = 0; i < 70; i++) {
+      const d = document.createElement('div');
+      d.className = 'confetti';
+      d.style.left = Math.random() * 100 + 'vw';
+      d.style.background = cols[i % cols.length];
+      d.style.animationDuration = (1.8 + Math.random() * 1.8) + 's';
+      d.style.animationDelay = (Math.random() * 0.6) + 's';
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 4200);
+    }
+  }
+
   function banner(text, sub) {
     const b = $('banner');
     b.innerHTML = esc(text) + (sub ? `<small>${esc(sub)}</small>` : '');
@@ -410,7 +440,19 @@
     if (hudCache.urg !== urgent) { $('timer').classList.toggle('urgent', urgent); hudCache.urg = urgent; }
     const lbl = h.ot ? 'UZATMA' : (h.dbl ? 'x2 İksir' : 'Kalan süre');
     if (hudCache.lbl !== lbl) { $('timerLabel').textContent = lbl; hudCache.lbl = lbl; }
-    if (!h.ot && lastLeft > 60 && h.left <= 60 && h.left > 0 && session.started) banner('2x İKSİR!', 'Son 60 saniye');
+    if (!h.ot && lastLeft > 60 && h.left <= 60 && h.left > 0 && session.started && !(h.cd > 0)) banner('2x İKSİR!', 'Son 60 saniye');
+    if (!h.ot && lastLeft > 10 && h.left <= 10 && h.left > 0) TA.Audio.play('tick');
+    // 3-2-1 geri sayım
+    const cdn = h.cd > 0 && session.started ? Math.ceil(h.cd) : 0;
+    if (cdn !== lastCd) {
+      const el2 = $('countdown');
+      if (cdn > 0) { el2.textContent = cdn; el2.classList.remove('hidden', 'tick'); void el2.offsetWidth; el2.classList.add('tick'); TA.Audio.play('tick'); }
+      else el2.classList.add('hidden');
+      lastCd = cdn;
+    }
+    const nq = session.mode === 'bot' ? '' : (h.ping ? '📶 ' + h.ping + ' ms' : '');
+    if (hudCache.nq !== nq) { const q = $('netQ'); q.textContent = nq; q.classList.toggle('bad', h.ping > 250); hudCache.nq = nq; }
+    if (hudCache.lag !== h.lag) { $('lagWarn').classList.toggle('hidden', !h.lag); hudCache.lag = h.lag; }
     lastLeft = h.left;
     const cm = h.crowns[ms], co = h.crowns[1 - ms];
     if (hudCache.cm !== cm) { $('crMe').textContent = cm; hudCache.cm = cm; }
@@ -420,7 +462,7 @@
     if (hudCache.w !== w) { $('elixirFill').style.width = w; hudCache.w = w; }
     if (hudCache.dbl !== h.dbl) { $('elixirFill').classList.toggle('dbl', h.dbl); hudCache.dbl = h.dbl; }
     const en = Math.floor(el);
-    if (hudCache.en !== en) { $('elixirNum').textContent = en; hudCache.en = en; }
+    if (hudCache.en !== en) { $('elixirNum').textContent = en; hudCache.en = en; document.querySelector('.ebar').classList.toggle('full', en >= 10); }
     const slots = $('slots').children;
     for (let i = 0; i < 4; i++) {
       const k = h.hand[i];
@@ -436,14 +478,14 @@
       const poor = cost > el + 0.001;
       sl.classList.toggle('poor', poor);
       sl.classList.toggle('selected', sel === i);
-      sl.classList.toggle('pending', h.pending === i);
+      sl.classList.toggle('pending', h.pending.includes(i));
       const shade = Math.max(0, 1 - el / cost);
       const sh = (shade * 100).toFixed(0) + '%';
       if (hudCache['s' + i] !== sh) { sl.querySelector('.shade').style.height = sh; hudCache['s' + i] = sh; }
     }
     if (hudCache.nx !== h.next) {
       const c = CARDS[h.next];
-      $('nextCard').querySelector('.nc-art').innerHTML = c ? c.emoji : '';
+      $('nextCard').querySelector('.nc-art').innerHTML = c ? `<img src="${TA.Art.cardArt(h.next)}" alt="">` : '';
       hudCache.nx = h.next;
     }
   }
@@ -461,9 +503,12 @@
         case 'hit': TA.Audio.play('hit'); break;
         case 'tower':
           TA.Audio.play('tower'); vibrate(f.s === ms ? 220 : 90);
+          flyCrown(f, f.s !== ms);
           if (!f.king) banner(f.s === ms ? 'Kuleni kaybettin!' : 'Kule yıkıldı! 👑');
           break;
         case 'overtime': banner('UZATMA!', 'İlk tacı alan kazanır'); break;
+        case 'go': banner('SAVAŞ!', session.kind === 'room' ? 'Arkadaş maçı' : session.kind === 'online' ? 'Online maç' : 'Kuleleri yık!'); TA.Audio.play('start'); vibrate(40); break;
+        case 'kingwake': TA.Audio.play('match'); break;
       }
     }
   }
@@ -494,30 +539,45 @@
     const [wx, wy] = renderer.toWorld(px, py);
     return { wx, wy };
   }
+  // Parmağın altındaki noktaya en yakın geçerli yeri bulur (kule kenarı, nehir, rakip yarı vb.)
   function placement(key, wx, wy) {
     const c = CARDS[key];
     const ms = session.mySide;
     let x = Math.max(0.5, Math.min(17.5, wx)), y = Math.max(0.5, Math.min(31.5, wy));
-    if (c.type !== 'spell') {
-      x = Math.min(17.5, Math.floor(x) + 0.5);
-      y = Math.min(31.5, Math.floor(y) + 0.5);
+    if (c.type === 'spell') return { x, y, valid: session.canDeploy(key, x, y) };
+    const snap = v => Math.floor(v) + 0.5;
+    x = Math.min(17.5, snap(x)); y = Math.min(31.5, snap(y));
+    if (session.canDeploy(key, x, y)) return { x, y, valid: true };
+    // Rakip yarısına sürüklendiyse önce o koridorun izinli sınırına yapıştır
+    const ly = sy(ms, y);
+    const bases = [[x, y]];
+    if (ly < 17.5) bases.push([x, sy(ms, 17.5)], [x, sy(ms, Math.max(ly, TA.POCKET_Y + 0.5))]);
+    for (const [bx, by] of bases) {
+      if (session.canDeploy(key, bx, by)) return { x: bx, y: by, valid: true };
     }
-    let valid = session.canDeploy(key, x, y);
-    if (!valid && c.type !== 'spell') {
-      // Rakip yarısına sürüklenirse kendi sınırına yapıştır
-      const ly = sy(ms, y);
-      if (ly < 17.5) {
-        const y2 = sy(ms, 17.5);
-        if (session.canDeploy(key, x, y2)) { y = y2; valid = true; }
+    // Yakın çevrede (≤2.5 karo) en yakın geçerli kareyi ara
+    let best = null, bd = Infinity;
+    for (const [bx, by] of bases) {
+      for (let dx = -2.5; dx <= 2.5; dx += 0.5) {
+        for (let dy = -2.5; dy <= 2.5; dy += 0.5) {
+          const d = dx * dx + dy * dy;
+          if (d >= bd || d > 6.5) continue;
+          const px = bx + dx, py = by + dy;
+          if (px < 0.5 || px > 17.5 || py < 0.5 || py > 31.5) continue;
+          if (Math.abs(px % 1) !== 0.5 || Math.abs(py % 1) !== 0.5) continue;
+          if (session.canDeploy(key, px, py)) { bd = d; best = [px, py]; }
+        }
       }
+      if (best) break;
     }
-    return { x, y, valid };
+    if (best) return { x: best[0], y: best[1], valid: true };
+    return { x, y, valid: false };
   }
   function onSlotDown(e) {
     if (!session || session.ended) return;
     const i = +e.currentTarget.dataset.i;
     const h = session.getHUD(performance.now());
-    if (h.pending === i) return;
+    if (h.pending.includes(i)) return;
     const key = h.hand[i];
     const wasSel = sel === i;
     sel = i;
@@ -566,10 +626,12 @@
   function tryDeploy(i, key, pl) {
     const h = session.getHUD(performance.now());
     if (h.hand[i] !== key) return false;
+    if (h.cd > 0) { toast('Maç başlamak üzere…'); return false; }
     if (CARDS[key].cost > h.elixir + 0.001) { toast('Yetersiz iksir! 💧'); TA.Audio.play('poor'); return false; }
     if (!pl.valid) { toast('Buraya yerleştiremezsin'); TA.Audio.play('poor'); return false; }
     const ok = session.play(i, pl.x, pl.y);
     if (ok) { profile.cardsPlayed++; vibrate(15); }
+    else toast('Kart oynanamadı, tekrar dene');
     return ok;
   }
 
@@ -631,6 +693,7 @@
 
     setTimeout(() => {
       TA.Audio.play(r.outcome === 'win' ? 'win' : r.outcome === 'lose' ? 'lose' : 'click');
+      if (r.outcome === 'win') confetti();
       const title = r.outcome === 'win' ? 'ZAFER!' : r.outcome === 'lose' ? 'YENİLGİ' : 'BERABERE';
       const reason = r.reason === 'left' ? (r.outcome === 'win' ? 'Rakip oyundan ayrıldı' : 'Bağlantı koptu') : r.reason === 'surrender' ? 'Teslim oldun' : '';
       const crowns = [0, 1, 2].map(i => `<span class="${i < (r.myCrowns || 0) ? 'on' : ''}" style="animation-delay:${0.15 + i * 0.25}s">👑</span>`).join('');
@@ -670,7 +733,7 @@
   window.addEventListener('beforeunload', () => { if (session && session.mode !== 'bot') session.quit(); });
 
   // Test kancası (yalnızca geliştirme testlerinde kullanılır)
-  TA.debug = { startOnline };
+  TA.debug = { startOnline, session: () => session, renderer };
 
   renderHome();
   if (!store.get('seenHelp', false)) { store.set('seenHelp', true); setTimeout(() => $('btnHelp').onclick(), 400); }

@@ -108,9 +108,11 @@
   <!-- ============ OYUN ============ -->
   <section id="game" class="screen">
     <div class="hud-top">
+      <button class="icon-btn small" id="btnMenu" aria-label="Menü">⚙️</button>
       <div class="opp">
         <div class="opp-name" id="oppName">Rakip</div>
         <div class="opp-tr" id="oppTr"></div>
+        <div class="net-q" id="netQ"></div>
       </div>
       <div class="score"><span class="cr blue" id="crMe">0</span><span class="crown">👑</span><span class="cr red" id="crOp">0</span></div>
       <div class="timer-box">
@@ -121,9 +123,10 @@
     <div class="arena-wrap" id="arenaWrap">
       <canvas id="cv"></canvas>
       <div class="banner" id="banner"></div>
-      <button class="icon-btn float-l" id="btnMenu" aria-label="Menü">⚙️</button>
-      <button class="icon-btn float-r" id="btnEmote" aria-label="Emoji">😀</button>
+      <div class="countdown hidden" id="countdown"></div>
+      <div class="lag-warn hidden" id="lagWarn">📶 Bağlantı zayıf…</div>
       <div class="emote-panel hidden" id="emotePanel"></div>
+      <div class="fx-layer" id="fxLayer"></div>
       <div class="waiting hidden" id="waitOverlay">
         <div class="spinner small"><span>⏳</span></div>
         <div id="waitText">Rakip bağlanıyor…</div>
@@ -135,6 +138,7 @@
         <div class="slots" id="slots"></div>
       </div>
       <div class="elixir">
+        <button class="icon-btn small" id="btnEmote" aria-label="Emoji">😀</button>
         <div class="drop">💧<b id="elixirNum">5</b></div>
         <div class="ebar"><div class="efill" id="elixirFill"></div><div class="eticks"></div></div>
       </div>
@@ -154,6 +158,7 @@
 <script src="js/ai.js"></script>
 <script src="js/net.js"></script>
 <script src="js/session.js"></script>
+<script src="js/art.js"></script>
 <script src="js/render.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/main.js"></script>

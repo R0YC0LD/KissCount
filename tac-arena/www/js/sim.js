@@ -11,6 +11,8 @@
   const BRIDGES = [3.5, 14.5];
   const MATCH_TIME = 180, DOUBLE_AT = 120, OVERTIME = 60;
   const ELIXIR_RATE = 1 / 2.8, START_ELIXIR = 5, MAX_ELIXIR = 10;
+  const POCKET_Y = 5.5; // kule yıkılınca rakip yarıda yerleştirilebilecek en ileri satır (kendi bakışımızla)
+  const COUNTDOWN = 3;
 
   // Taraf koordinat dönüşümü: taraf 1 için y ekseni aynalanır.
   function sy(side, y) { return side === 0 ? y : H - y; }
@@ -46,8 +48,8 @@
     if (c.type === 'spell') return true;
     const ly = sy(side, y); // tarafın kendi bakış açısındaki y (kendi yarısı > 17)
     let ok = ly >= RIVER_BOT + 0.5;
-    if (!ok && ly >= 11 && ly < RIVER_TOP) {
-      // Rakibin o koridordaki prenses kulesi yıkıldıysa ileri yerleştirme
+    if (!ok && ly >= POCKET_Y) {
+      // Rakibin o koridordaki prenses kulesi yıkıldıysa o koridorun neredeyse tamamı açılır
       const lane = x < W / 2 ? 'L' : 'R';
       if (!ents.some(e => e.kind === 'tower' && e.side === 1 - side && e.lane === lane && e.hp > 0)) ok = true;
     }
@@ -65,6 +67,8 @@
     constructor(opts) {
       opts = opts || {};
       this.time = 0;
+      this.clock = 0; // geri sayım dahil sürekli ilerleyen saat (ağ senkronu için)
+      this.cd = opts.countdown == null ? COUNTDOWN : opts.countdown;
       this.nid = 1;
       this.ents = [];
       this.projs = [];
@@ -122,7 +126,7 @@
 
     // Oyuncu kart oynatır. Başarılıysa true.
     play(side, handIdx, key, x, y) {
-      if (this.over) return false;
+      if (this.over || this.cd > 0) return false;
       const hand = this.hands[side];
       if (handIdx < 0 || handIdx > 3 || hand[handIdx] !== key) return false;
       const c = CARDS[key];
@@ -173,6 +177,12 @@
     // ---------- ana döngü ----------
     step(dt) {
       if (this.over) return;
+      this.clock += dt;
+      if (this.cd > 0) {
+        this.cd -= dt;
+        if (this.cd <= 0) { this.cd = 0; this.emit({ t: 'go' }); }
+        return;
+      }
       this.time += dt;
       const rate = ELIXIR_RATE * (this.doubleElixir ? 2 : 1);
       for (let s = 0; s < 2; s++) this.elixir[s] = Math.min(MAX_ELIXIR, this.elixir[s] + rate * dt);
@@ -368,8 +378,9 @@
       const tg = c.targets || 'all';
       if (c.proj) {
         this.projs.push({
-          id: this.nid++, side: e.side, x: e.x, y: e.y - (e.air ? 0.6 : 0) , tid: t.id, tx: t.x, ty: t.y,
-          spd: c.proj, dmg, splash: c.splash || 0, hitAir: tg !== 'ground', fx: c.projFx || 'bolt'
+          id: this.nid++, side: e.side, x: e.x, y: e.y, tid: t.id, tx: t.x, ty: t.y,
+          spd: c.proj, dmg, splash: c.splash || 0, hitAir: tg !== 'ground', fx: c.projFx || 'bolt',
+          h0: e.kind === 'tower' ? (e.key === 'king' ? 3 : 2.4) : (e.air ? 1.2 : 0.6), h1: t.air ? 1.2 : (t.kind === 'tower' ? 1.4 : 0.5)
         });
       } else if (c.splashSelf) {
         this.areaDamage(e.side, e.x, e.y, c.splashSelf + e.r, dmg, { air: false });
@@ -386,6 +397,7 @@
       if (o.hp <= 0) return;
       o.hp -= dmg;
       o.flash = 0.12;
+      if (o.kind === 'tower' || dmg >= 300) this.emit({ t: 'dmg', x: o.x, y: o.y, v: Math.round(dmg), tw: o.kind === 'tower' ? 1 : 0, s: o.side });
       if (o.kind === 'tower' && o.key === 'king' && !o.active) { o.active = true; this.emit({ t: 'kingwake', s: o.side }); }
     }
 
@@ -424,14 +436,14 @@
       for (let i = this.projs.length - 1; i >= 0; i--) {
         const p = this.projs[i];
         const t = this.byId(p.tid);
-        if (t) { p.tx = t.x; p.ty = t.y - (t.air ? 0.6 : 0); }
+        if (t) { p.tx = t.x; p.ty = t.y; }
         const dx = p.tx - p.x, dy = p.ty - p.y;
         const d = Math.hypot(dx, dy);
         const st = p.spd * dt;
         if (d <= st) {
           this.projs.splice(i, 1);
           if (p.splash) {
-            this.areaDamage(p.side, p.tx, p.ty + (t && t.air ? 0.6 : 0), p.splash, p.dmg, { air: p.hitAir });
+            this.areaDamage(p.side, p.tx, p.ty, p.splash, p.dmg, { air: p.hitAir });
             this.emit({ t: 'boom', x: p.tx, y: p.ty, r: p.splash, k: p.fx });
           } else if (t) {
             this.damage(t, p.dmg);
@@ -462,6 +474,12 @@
           const nx = dx / d, ny = dy / d;
           a.x -= nx * ov * wa; a.y -= ny * ov * wa;
           b.x += nx * ov * wb; b.y += ny * ov * wb;
+          // Kafa kafaya gelen ve birbirini hedeflemeyen birimler yana kayarak geçsin (köprüde kilitlenmeyi önler)
+          if (Math.abs(ny) > 0.6 && a.target !== b.id && b.target !== a.id && (a.side !== b.side || a.target !== b.target)) {
+            const sgn = a.id < b.id ? 1 : -1;
+            const slide = ov * 0.8 * sgn;
+            a.x -= ny * slide * wa; b.x += ny * slide * wb;
+          }
         }
       }
       for (const a of troops) {
@@ -547,18 +565,18 @@
         if (e.flash > 0) f |= 128;
         ents.push({ id: e.id, k: e.key, s: e.side, side: e.side, lane: e.lane, x: e.x, y: e.y, hp: Math.ceil(e.hp), mh: e.maxHp, f, r: e.r, d: e.dir, kind: e.kind });
       }
-      const projs = this.projs.map(p => ({ id: p.id, k: p.fx, x: p.x, y: p.y, s: p.side }));
-      for (const sp of this.spells) projs.push({ id: sp.id, k: sp.key, x: sp.x, y: sp.y, s: sp.side, sp: 1 });
+      const projs = this.projs.map(p => ({ id: p.id, k: p.fx, x: p.x, y: p.y, s: p.side, h0: p.h0, h1: p.h1, tx: p.tx, ty: p.ty }));
+      for (const sp of this.spells) projs.push({ id: sp.id, k: sp.key, x: sp.x, y: sp.y, s: sp.side, sp: 1, tx: sp.tx, ty: sp.ty });
       const areas = this.areas.map(a => ({ id: a.id, k: a.key, x: a.x, y: a.y, r: a.r, t: a.t }));
       return {
-        time: this.time, left: this.timeLeft, ot: this.overtime, dbl: this.doubleElixir,
+        time: this.time, clock: this.clock, cd: this.cd, left: this.timeLeft, ot: this.overtime, dbl: this.doubleElixir,
         crowns: this.crowns.slice(), elixir: this.elixir.slice(), ents, projs, areas,
         over: this.over, winner: this.winner
       };
     }
   }
 
-  const api = { Game, canDeployOn, ELIXIR_RATE, W, H, RIVER_TOP, RIVER_BOT, BRIDGES, MATCH_TIME, DOUBLE_AT, OVERTIME, sy, formation };
+  const api = { Game, canDeployOn, ELIXIR_RATE, POCKET_Y, COUNTDOWN, W, H, RIVER_TOP, RIVER_BOT, BRIDGES, MATCH_TIME, DOUBLE_AT, OVERTIME, sy, formation };
   if (typeof module !== 'undefined' && module.exports) module.exports = Object.assign({}, TA, api);
   else root.TA = Object.assign(root.TA || {}, api);
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -5,6 +5,26 @@ Farklı telefonlardan ve farklı internet bağlantılarından oyuncular birbirle
 
 ![simge](icon.png)
 
+## 🆕 Sürüm 1.1'deki yenilikler
+
+- **Elle çizilmiş, animasyonlu karakterler:** Emojiler kaldırıldı. Her birim kodla çizilen bir karakter oldu; yürüme, saldırı ve kanat çırpma animasyonları var. Hepsi takım renginde (mavi/kırmızı).
+- **3D arena:** Eğik kamera perspektifi, yüksekliği olan taş kuleler (üstlerinde okçu prensesler ve kral), derinliği olan nehir kıyısı, korkuluklu köprüler, arena duvarları ve ağaçlar.
+- **Oyun hissi:**
+  - 3-2-1 geri sayım; birlikler yukarıdan düşerek iniyor, ölünce devrilerek kayboluyor.
+  - Kule hasar sayıları, yıkılan kuleden skora uçan taç, ekran sarsıntısı, zaferde konfeti.
+  - Rakibin oynadığı kart, arenada görseliyle gösteriliyor.
+- **Dokunma düzeltmeleri:**
+  - Kule yıkılınca o koridorun yıkılan kuleye kadar olan kısmı açılıyor.
+  - Geçersiz bir yere bırakılan kart en yakın geçerli kareye yerleşiyor.
+  - Arenayı kapatan butonlar kenara alındı.
+  - Online misafir oyuncu art arda kart oynayabiliyor.
+- **Online performans:**
+  - Daha küçük (~350 bayt) ve daha sık (12/sn) durum paketleri.
+  - Gecikme dalgalanmasına göre kendini ayarlayan akıcılaştırma; paket gecikince kısa süreli tahmin.
+  - Misafirin oynadığı kart anında görünüyor; ping göstergesi ve "bağlantı zayıf" uyarısı.
+  - Eşleşmede bağlantısı kopmuş oyuncular atlanıyor.
+- **Hata düzeltmeleri:** Köprüde karşılaşan Devlerin kilitlenmesi giderildi. Bot artık cebe birlik koyabiliyor.
+
 ## 📲 Kurulum
 
 1. `TacArena.apk` dosyasını telefona indir.
@@ -51,7 +71,8 @@ tac-arena/
 │   ├── js/ai.js          bot yapay zekası
 │   ├── js/net.js         online eşleştirme (Supabase Realtime)
 │   ├── js/session.js     bot / host / misafir oturumları ve ağ senkronizasyonu
-│   ├── js/render.js      canvas çizimi ve efektler
+│   ├── js/art.js         vektör karakter çizimleri ve animasyonlar
+│   ├── js/render.js      2.5D perspektifli arena çizimi ve efektler
 │   ├── js/audio.js       sentezlenmiş ses efektleri
 │   └── js/main.js        arayüz ve menüler
 └── android/              ← WebView sarmalayıcı Android projesi
@@ -62,7 +83,7 @@ Supabase Realtime (`eemk-web` projesi) kullanılıyor. Sadece *presence* ve *bro
 veritabanına hiçbir şey yazılmıyor.
 
 1. Oyuncular bir lobi kanalına katılır. "Savaş"a basanlar birbirini görür ve davet/kabul ile eşleşir.
-2. Eşleşen iki oyuncudan biri **host** olur. Host maçı kendi telefonunda simüle eder ve saniyede 10 kez durum gönderir.
+2. Eşleşen iki oyuncudan biri **host** olur. Host maçı kendi telefonunda simüle eder ve saniyede 12 kez durum gönderir.
 3. Diğer oyuncu (**misafir**) gelen durumları akıcı göstermek için ara değerleme (interpolation) yapar. Kart oynadığında komutu host'a gönderir, host kontrol edip uygular.
 4. Misafir haritayı ters görür, yani herkes kendi kulelerini altta görür.
 

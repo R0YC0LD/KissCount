@@ -33,6 +33,7 @@
       this.state = 'idle'; // idle | searching | playing
       this.since = 0;
       this.pending = null;
+      this.noResp = new Map(); // davetime yanıt vermeyen (bağlantısı kopmuş olabilecek) oyuncular
       this.onlineCount = 0;
       this.onOnline = null;
       this.onMatch = null;
@@ -87,6 +88,7 @@
       this.state = 'searching';
       this.since = Date.now();
       this.pending = null;
+      this.noResp.clear();
       this.connectLobby();
       this._track();
       clearInterval(this._evalTimer);
@@ -106,9 +108,13 @@
 
     _evaluate() {
       if (this.state !== 'searching') return;
-      if (this.pending && Date.now() - this.pending.at > 4000) this.pending = null;
+      if (this.pending && Date.now() - this.pending.at > 4000) {
+        // yanıt gelmedi: bu oyuncuyu bir süre atla (uygulaması kapanmış olabilir)
+        this.noResp.set(this.pending.to, (this.noResp.get(this.pending.to) || 0) + 1);
+        this.pending = null;
+      }
       if (this.pending) return;
-      const list = this._searchers().filter(m => m.id !== this.id);
+      const list = this._searchers().filter(m => m.id !== this.id && (this.noResp.get(m.id) || 0) < 2);
       if (!list.length) return;
       const oldest = list[0];
       // En eski bekleyen davet bekler; diğerleri en eskiyi davet eder.
@@ -156,24 +162,47 @@
       const ch = this.client.channel('tac-arena-room-' + code, { config: { presence: { key: this.id }, broadcast: { self: false } } });
       this.room = ch;
       let done = false;
-      ch.on('presence', { event: 'sync' }, () => {
-        if (done) return;
+      let partner = null, partnerAt = 0;
+      const dead = new Set();
+      const heard = new Set();   // bizi selamlayan oyuncular
+      const metas = () => {
         const st = ch.presenceState();
         const list = [];
         for (const k of Object.keys(st)) { const m = st[k][st[k].length - 1]; if (m && m.v === CONFIG.proto) list.push(m); }
         list.sort((a, b) => (a.since - b.since) || (a.id < b.id ? -1 : 1));
-        const idx = list.findIndex(m => m.id === this.id);
-        if (idx < 0) return;
-        if (idx >= 2) { if (onStatus) onStatus('full'); return; }
-        if (list.length < 2) { if (onStatus) onStatus('waiting'); return; }
-        const host = list[0], guest = list[1];
-        const opp = idx === 0 ? guest : host;
+        return list;
+      };
+      const finish = (opp) => {
+        if (done) return;
         done = true;
+        clearInterval(timer);
         if (onStatus) onStatus('found');
-        const info = { matchId: 'room' + code + '_' + host.id + '_' + guest.id, host: idx === 0, opp: { id: opp.id, name: opp.name, trophies: opp.tr } };
-        // Oda kanalı maç başlayana kadar açık kalır (rakip de eşleşmeyi görebilsin);
-        // arayüz maç başlayınca leaveRoom() çağırır.
-        onMatch(info);
+        const meFirst = since < opp.since || (since === opp.since && this.id < opp.id);
+        const host = meFirst ? this.id : opp.id, guest = meFirst ? opp.id : this.id;
+        // Oda kanalı maç başlayana kadar açık kalır; arayüz maç başlayınca leaveRoom() çağırır.
+        onMatch({ matchId: 'room' + code + '_' + host + '_' + guest, host: meFirst, opp: { id: opp.id, name: opp.name, trophies: opp.tr } });
+      };
+      const tick = () => {
+        if (done || this.room !== ch) return;
+        const others = metas().filter(m => m.id !== this.id && !dead.has(m.id));
+        const myIdx = metas().findIndex(m => m.id === this.id);
+        if (!others.length) { partner = null; if (onStatus) onStatus('waiting'); return; }
+        // Odada 2'den fazla kişi varsa ve biz ilk ikide değilsek oda dolu
+        if (myIdx >= 2 && others.filter(m => !heard.has(m.id)).length >= 2) { if (onStatus) onStatus('full'); }
+        const cand = others[0];
+        if (!partner || partner.id !== cand.id) { partner = cand; partnerAt = Date.now(); }
+        if (heard.has(partner.id)) { ch.send({ type: 'broadcast', event: 'hi', payload: { to: partner.id, from: this.id, ok: 1 } }).catch(() => {}); finish(partner); return; }
+        ch.send({ type: 'broadcast', event: 'hi', payload: { to: partner.id, from: this.id } }).catch(() => {});
+        if (Date.now() - partnerAt > 5000) { dead.add(partner.id); partner = null; }
+      };
+      const timer = setInterval(tick, 700);
+      ch.on('presence', { event: 'sync' }, () => tick());
+      ch.on('broadcast', { event: 'hi' }, ({ payload }) => {
+        if (!payload || payload.to !== this.id || done) return;
+        heard.add(payload.from);
+        dead.delete(payload.from);
+        const m = metas().find(x => x.id === payload.from);
+        if (m && (!partner || partner.id === m.id || payload.ok)) { partner = m; tick(); }
       });
       ch.subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -183,10 +212,12 @@
           if (onStatus) onStatus('error');
         }
       });
+      this._roomTimer = timer;
       if (this.lobbyReady) { this.state = 'playing'; this._track(); }
     }
 
     leaveRoom() {
+      clearInterval(this._roomTimer);
       if (!this.room) return;
       const ch = this.room;
       this.room = null;

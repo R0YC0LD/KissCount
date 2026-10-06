@@ -114,6 +114,8 @@
       const troops = hand.filter(o => o.c.type === 'troop');
       if (troops.length) {
         const o = troops[Math.floor(Math.random() * troops.length)];
+        // Rakibin o koridordaki kulesi yıkıldıysa doğrudan ileriye (cebe) yerleştir
+        if (!this.g.tower(1 - this.side, lane) && this.tryPlay(o, lane === 'L' ? 4.5 : 13.5, 9.5)) return;
         const back = o.c.range >= 3 ? 21.5 : 18.5;
         this.tryPlay(o, bx, back);
         return;
